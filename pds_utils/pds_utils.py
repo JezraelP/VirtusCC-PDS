@@ -16,9 +16,29 @@ Seções:
     - phase_metrics: RMSE absoluto entre fases de um sinal complexo
     - num_validate: Erro médio quadrático (MSE) e correlação de Pearson
 
-2. Sinais e Sistemas no Domínio Discreto
-    - Soma de Convolução: Conv_sum, conv_sum_vectorized, Conv_sum_numba_parallel, Conv_sum_cupy
+2. Sinais e sistemas no tempo discreto
+    - Soma de Convolução: 
+        Conv_sum; 
+        Conv_sum_vectorized;
+        Conv_sum_numba_parallel; 
+        Conv_sum_cupy.
     - pyfilter: Resolução de equações de diferenças
+
+3. Transformadas discretas
+    - Algoritmos DFT e IDFT:
+        DFT;
+        IDFT;
+        DFT_numba;
+        IDFT_numba;
+        DFT_cupy;
+        IDFT_cup.
+    - Algoritmos FFT e IFFT com decimação na frequência:
+        FFT_freq;
+        IFFT_freq;
+        FFT_freq_numba;
+        IFFT_freq_numba.
+
+
 """
 import numpy as np
 from numba import njit, prange
@@ -91,7 +111,7 @@ def Num_validate(ref, estimado, function):
     print()
 
 #-----------------------------------------------------------------------------
-# 2. Sinais e Sistemas no Domínio Discreto
+# 2. Sinais e sistemas no domínio discreto
 #-----------------------------------------------------------------------------
 
 def Conv_sum(x, h, mode='full'):
@@ -229,3 +249,252 @@ def pyfilter(b, a, x):
         y[n] = x_pond - y_pond
 
     return y # y = lfilter(b, a, x, z_i = NULL)
+
+#-----------------------------------------------------------------------------
+# 3. Transformadas discretas
+#-----------------------------------------------------------------------------
+
+def DFT(x, N):
+    '''Compute the N-point Discrete Fourier Transform of a 1D array x with length L.
+    If N > L, zero-pad x to length N.
+    
+    Parameters:
+    x : 1D array
+    N : int        Length of the DFT.
+
+    Returns:
+    X : 1D array   DFT of x.
+    '''
+
+    W_N = np.exp(-1j * 2 * np.pi / N)
+    X = np.zeros(N, dtype=np.complex128)
+    if len(x) < N:
+        x = np.pad(x, (0, N - len(x)), 'constant') # Zero-padding
+    else:
+        x = x[:N]  # Truncate if longer than N
+    for k in range(N):
+        for n in range(len(x)):
+            X[k] += x[n] * W_N**(k*n)
+
+    return X
+
+def IDFT(X, N):
+    '''Compute the N-point Inverse Discrete Fourier Transform of a 1D array X with length N. Eq.(1.8)
+
+    Parameters:
+    X : 1D array
+    N : int        Length of the IDFT.
+
+    Returns:
+    x : 1D array   IDFT of X.
+    '''
+
+    return (1/N)*np.conj(DFT(np.conj(X), N))
+
+# DFT e IDFT com Numba
+
+@njit(parallel=True)
+def DFT_numba(x, N):
+    '''Compute the N-point Discrete Fourier Transform of a 1D array x with length L using Numba for acceleration.
+    If N > L, zero-pad x to length N.
+
+    Parameters:
+    x : 1D array
+    N : int        Length of the DFT.
+
+    Returns:
+    X : 1D array   DFT of x.
+    '''
+
+    L = len(x)
+    x_padded = np.zeros(N, dtype=np.complex128)
+    x = np.asarray(x, dtype=np.complex128)
+    if L < N:
+        x_padded[:L] = x
+    else:
+        x_padded = x[:N]
+
+    X = np.zeros(N, dtype=np.complex128)
+    W_N = np.exp(-2j * np.pi / N)
+
+    for k in prange(N):
+        s = 0.0 + 0.0j
+        for n in range(N):
+            s += x_padded[n] * W_N**(k * n)
+        X[k] = s
+    return X
+
+@njit(parallel=True)
+def IDFT_numba(X, N):
+    '''Compute the N-point Inverse Discrete Fourier Transform of a 1D array X with length N using Numba for acceleration. Eq.(1.8)
+
+    Parameters:
+    X : 1D array
+    N : int        Length of the IDFT.
+
+    Returns:
+    x : 1D array   IDFT of X.
+    '''
+
+    return (1/N)*np.conj(DFT_numba(np.conj(X), N))
+
+# DFT e IDFT com CuPy
+
+def DFT_cupy(x, N):
+    '''Compute the N-point Discrete Fourier Transform of a 1D array x with length L using CuPy for acceleration.
+    If N > L, zero-pad x to length N.
+
+    Parameters:
+    x : 1D array
+    N : int        Length of the DFT.
+
+    Returns:
+    X : 1D array   DFT of x.
+    '''
+
+    x = cp.asarray(x, dtype=cp.complex128)
+    L = x.shape[0]
+    if L < N:
+        x = cp.pad(x, (0, N - L), 'constant')
+    n = cp.arange(N)
+    k = n.reshape((N, 1))
+
+    W_N = cp.exp(-2j * cp.pi / N)
+    M = W_N ** (k * n)  # Matriz de exponenciais
+    return M @ x  # Produto matricial
+
+def IDFT_cupy(X, N):
+    '''Compute the N-point Inverse Discrete Fourier Transform of a 1D array X with length N using CuPy for acceleration.
+
+    Parameters:
+    X : 1D array
+    N : int        Length of the IDFT.
+
+    Returns:
+    x : 1D array   IDFT of X.
+    '''
+
+    X = cp.asarray(X, dtype=cp.complex128)
+    n = cp.arange(N)
+    k = n.reshape((N, 1))
+    W_N = cp.exp(-2j * cp.pi / N)
+    M = W_N ** (-k * n)
+    return (M @ X) / N
+
+# FFT e IFFT com decimação na frequência
+
+def FFT_freq(x, N):
+    '''Compute the FFT of a 1D array x using frequency domain decomposition.
+
+    Parameters:
+    x : 1D array
+        Input signal.
+
+    Returns:
+    X : 1D array
+        FFT of the input signal.
+    '''
+
+    # Verifica se N é potência de 2
+    # Caso não seja, ajusta para a próxima potência de 2
+    exp = int(np.ceil(np.log2(N)))
+    if((N > 0) and (N & (N-1)) != 0):
+        N = 2**exp
+
+    x_padded = np.zeros(N, dtype=np.complex128)
+    x_padded[:len(x)] = x
+
+    for i in range(exp):
+        L = N//(2**i)
+        ramos = N//(2**(exp-i))
+        W_L = np.exp(-2j * np.pi / L)
+        for ramo in range(ramos):
+            t = 1
+            for n in range(L//2):
+                idx = ramo*L + n
+                x_temp = x_padded[idx]
+                x_padded[idx] = x_temp + x_padded[idx + L//2]
+                x_padded[idx+L//2] = (x_temp - x_padded[idx + L//2]) * t
+                t *= W_L
+    
+    indices = np.zeros(N, dtype=np.int64)
+    for idx_out in range(N):
+        rev = 0
+        i_temp = idx_out
+        for _ in range(exp):
+            rev = (rev << 1) | (i_temp & 1)
+            i_temp = i_temp >> 1
+        indices[idx_out] = rev
+    return x_padded[indices]
+
+@njit(parallel=True)
+def FFT_freq_numba(x, N):
+    '''Compute the FFT of a 1D array x using frequency domain decomposition, optimized with Numba.
+
+    Parameters:
+    x : 1D array
+        Input signal.
+
+    Returns:
+    X : 1D array
+        FFT of the input signal.
+    '''
+
+    exp = int(np.ceil(np.log2(N)))
+    if((N > 0) and (N & (N-1)) != 0):
+        N = 2**exp
+    
+
+    x_padded = np.zeros(N, dtype=np.complex128)
+    x_padded[:len(x)] = x
+
+    
+    for i in range(exp):
+        L = N//(2**i)
+        ramos = N//(2**(exp-i))
+        W_L = np.exp(-2j * np.pi / L)
+        for ramo in prange(ramos):
+            t = 1
+            for n in range(L//2):
+                idx = ramo*L + n
+                x_temp = x_padded[idx]
+                x_padded[idx] = x_temp + x_padded[idx + L//2]
+                x_padded[idx+L//2] = (x_temp - x_padded[idx + L//2]) * t
+                t *= W_L
+    
+    indices = np.zeros(N, dtype=np.int64)
+    for idx_out in range(N):
+        rev = 0
+        i_temp = idx_out
+        for _ in range(exp):
+            rev = (rev << 1) | (i_temp & 1)
+            i_temp = i_temp >> 1
+        indices[idx_out] = rev
+    return x_padded[indices]
+
+def IFFT(X, N):
+    '''Compute the N-point Inverse Fast Fourier Transform of a 1D array X with length N. Eq.(1.8)
+
+    Parameters:
+    X : 1D array
+    N : int        Length of the IDFT.
+
+    Returns:
+    x : 1D array   IDFT of X.
+    '''
+
+    return (1/N)*np.conj(FFT_freq(np.conj(X), N))
+
+@njit(parallel=True)
+def IFFT_numba(X, N):
+    '''Compute the N-point Inverse Fast Fourier Transform of a 1D array X with length N using Numba for acceleration. Eq.(1.8)
+
+    Parameters:
+    X : 1D array
+    N : int        Length of the IDFT.
+
+    Returns:
+    x : 1D array   IDFT of X.
+    '''
+
+    return (1/N)*np.conj(FFT_freq_numba(np.conj(X), N))
