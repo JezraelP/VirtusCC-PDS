@@ -191,7 +191,7 @@ def Conv_sum_numba_parallel(x, h, mode='full'):
     '''
     N = len(x)
     M = len(h)
-    y = np.zeros(N + M - 1)
+    y = np.zeros(N + M - 1, dtype = np.complex128)
 
     for n in prange(N + M - 1):
         for k in range(N):
