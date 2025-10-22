@@ -15,6 +15,7 @@ Seções:
     - rel_rmse_cupy: Equivalente rel_rmse para GPU
     - phase_metrics: RMSE absoluto entre fases de um sinal complexo
     - num_validate: Erro médio quadrático (MSE) e correlação de Pearson
+    - lp_freq_metrics: Métricas de resposta em frequência para filtros passa-baixa FIR
 
 2. Sinais e sistemas no tempo discreto
     - Soma de Convolução: 
@@ -37,6 +38,8 @@ Seções:
         IFFT_freq;
         FFT_freq_numba;
         IFFT_freq_numba.
+4. Filtros Digitais
+    - ideal_lp: Projeto de filtro passa-baixas por aproximação ideal
 
 
 """
@@ -109,6 +112,76 @@ def Num_validate(ref, estimado, function):
     print(f"   ➤ Erro Médio Quadrático Relativo (RMSE): {rmse_rel:.6e}")
     print(f"   ➤ Correlação: {corr:.6f}")
     print()
+
+def lp_freq_metrics(h, f_s, f_c, worN = 8192, trans_margin = 0.05, eps = 1e-12):
+    '''Cálculo das métricas de frequência do filtro.
+    
+    Args:
+        h: Coeficientes do filtro.
+        f_s: Frequência de amostragem em Hz.
+        f_c: Frequência de corte do filtro em Hz.
+        worN: Número de pontos para cálculo da resposta em frequência.
+        trans_margin: banda de transição
+
+    Returns:
+        dict com as métricas calculadas.
+    '''
+    w, H = freqz(h, worN=worN, fs=f_s)  # w em Hz
+    mag = np.abs(H)
+    mag_db = 20*np.log10(mag + eps)
+
+    # Regiões
+    pass_idx = w <= f_c
+    stop_idx = w >= f_c * (1 + trans_margin)
+
+    # Ganho em DC
+    gain_dc = mag[0]
+
+    # Ripple na banda de passagem
+    ripple_pp_db = (mag_db[pass_idx].max() - mag_db[pass_idx].min()) if np.any(pass_idx) else np.nan
+    ripple_rms = np.sqrt(np.mean((mag[pass_idx] - 1.0)**2)) if np.any(pass_idx) else np.nan
+
+    # Atenuação na banda de rejeição (pior caso)
+    stop_max_db = mag_db[stop_idx].max() if np.any(stop_idx) else np.nan
+
+    # Frequência de corte efetiva (-3 dB)
+    # Primeiro índice onde cai abaixo -3 dB
+    idx_3db = np.argmax(mag_db <= -3.0)
+    f_3db = w[idx_3db] if idx_3db > 0 else np.nan
+
+    # Fase e ajuste linear na banda de passagem
+    phase = np.unwrap(np.angle(H))
+
+    ww = w[pass_idx]
+    ph = phase[pass_idx]
+    if len(ww) >= 2:
+
+        # Ajuste linear
+        A = np.vstack([ww, np.ones_like(ww)]).T
+        a, b = np.linalg.lstsq(A, ph, rcond=None)[0]
+        ph_fit = a*ww + b
+        
+        # R² da fase
+        ss_res = np.sum((ph - ph_fit)**2)
+        ss_tot = np.sum((ph - np.mean(ph))**2)
+        phase_r2 = 1.0 - (ss_res/ss_tot if ss_tot > 0 else np.nan)
+        
+        # Atraso de grupo estimado
+        group_delay = -(a/(2*np.pi)) * f_s
+    else:
+        phase_r2 = np.nan
+        group_delay = np.nan
+    
+    return {
+        'w': w, 'H': H, 'mag_db': mag_db, 'phase': phase,
+        'gain_dc': gain_dc,
+        'ripple_pp_db': ripple_pp_db,
+        'ripple_rms': ripple_rms,
+        'stop_max_db': stop_max_db,
+        'f_3db': f_3db,
+        'phase_r2': phase_r2,
+        'group_delay': group_delay
+    }
 
 #-----------------------------------------------------------------------------
 # 2. Sinais e sistemas no domínio discreto
@@ -498,3 +571,32 @@ def IFFT_numba(X, N):
     '''
 
     return (1/N)*np.conj(FFT_freq_numba(np.conj(X), N))
+
+
+#-----------------------------------------------------------------------------
+# 4. Filtros Digitais
+#-----------------------------------------------------------------------------
+@njit(parallel=True)
+def ideal_lp(f_c, f_s, M):
+    """Projeto de um filtro passa-baixas por aproximação ideal.
+    
+    Args:
+        f_c: Frequência de corte do filtro em Hz.
+        f_s: Frequência de amostragem em Hz.
+        M: Número de coeficientes do filtro.
+        
+    Returns:
+        h: Coeficientes do filtro.
+    """
+    h = np.zeros(M)
+    omega_c = 2 * np.pi * f_c / f_s
+
+    for n in range(0, M):
+        k = n - (M-1)/2
+        if k == 0:
+            h[n] = omega_c / np.pi
+        else:
+            h[n] = (1/(np.pi * k))*np.sin(omega_c * k)
+    return h
+
+#-----------------------------------------------------------------------------
