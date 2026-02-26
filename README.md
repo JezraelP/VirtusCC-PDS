@@ -13,10 +13,13 @@ Este repositório é dedicado ao desenvolvimento, implementação e documentaç�
 
 A organização do repositório poderá incluir (conforme evolução do projeto):
 
-- **`Sinais e Sistemas no Tempo Discreto`**: Notebook referente ao **Capítulo 1** da bibliografia.
-- **`Trasformadas Discretas`**: Notebok referente ao **Capítulo 3** da bibliografia.
+- **`Sinais e Sistemas no Tempo Discreto`**: Notebook com implementação do algoritmo de convolução, algoritmos de análise e otimização computacional. Simulação de exemplos do **Capítulo 1** da bibliografia.
+- **`Trasformadas Discretas`**: Notebok com implementação dos algoritmos de DFT e FFT, com otimização compuytacional e simulação para visualização de espectro de sinais.
+- **`Filtros Digitais`**: Notebook com implementação de filtros digitais, e simulação da filtragem de um sinal de áudio ruidoso.
+- **`Filtragem Adaptativa`**: Notebbok com implementação do algoritmo LMS para equalização de sinais em sistemas de comunicação digital em banda base.
+- **`Conversores AD_DA`**:  Notebook com implementação de ADC com efeitos de ruído térmico e quantização, e saturação, e DAC com ZOH e filtragem IIR.
 - **`/pds_utils`**: Pasta com arquivo *pds_utils.py*, que contém todas as funções e algoritmos implementados.
-- **`Filtros Digitais`**: Notebook com implementação de filtros digitais, e simulação da filtragem de um sinal de áudio ruidoso
+
 
 ## Como Executar
 
