@@ -16,6 +16,7 @@ A organização do repositório poderá incluir (conforme evolução do projeto)
 - **`Sinais e Sistemas no Tempo Discreto`**: Notebook referente ao **Capítulo 1** da bibliografia.
 - **`Trasformadas Discretas`**: Notebok referente ao **Capítulo 3** da bibliografia.
 - **`/pds_utils`**: Pasta com arquivo *pds_utils.py*, que contém todas as funções e algoritmos implementados.
+- **`Filtros Digitais`**: Notebook com implementação de filtros digitais, e simulação da filtragem de um sinal de áudio ruidoso
 
 ## Como Executar
 

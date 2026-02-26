@@ -40,6 +40,8 @@ Seções:
         IFFT_freq_numba.
 4. Filtros Digitais
     - ideal_lp: Projeto de filtro passa-baixas por aproximação ideal
+    - hamming_fir: Projeto de filtro FIR com janela de Hamming
+    - hamming_window: Geração de janela de Hamming
 
 
 """
@@ -599,4 +601,41 @@ def ideal_lp(f_c, f_s, M):
             h[n] = (1/(np.pi * k))*np.sin(omega_c * k)
     return h
 
+@njit(parallel=True)
+def hamming_window(M, alpha = 0.54):
+    '''
+    Função para gerar uma janela de Hamming.
+
+    params:
+        M: Número de pontos da janela.
+        alpha: Parâmetro da janela de Hamming.
+
+    returns:
+        w: Janela de Hamming.
+    '''
+    n = np.arange(0, M)
+    w = alpha + (1-alpha)*np.cos(2*np.pi*(n-(M-1)/2)/(M-1))
+    return w
+
+@njit(parallel=True)
+def hamming_fir(f_c, f_s, M, alpha = 0.54):
+    '''
+    Função que calcula os coeficientes de um filtro fir passa-baixas utilizando janelamento de Hamming
+
+    Args:
+        f_c: Frequência de corte do filtro em Hz.
+        f_s: Frequência de amostragem em Hz.
+        M: Número de coeficientes do filtro.
+        alpha: Parâmetro da janela de Hamming
+    
+    Returns:
+        h_hamming: Coeficientes do filtro
+    '''
+
+    h = ideal_lp(f_c, f_s, M)
+    window = hamming_window(M, alpha)
+
+    h_hamming = h*window
+
+    return h_hamming
 #-----------------------------------------------------------------------------
