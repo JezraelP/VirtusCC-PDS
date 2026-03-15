@@ -579,26 +579,27 @@ def IFFT_numba(X, N):
 # 4. Filtros Digitais
 #-----------------------------------------------------------------------------
 @njit(parallel=True)
-def ideal_lp(f_c, f_s, M):
+def ideal_lp(f_c, M):
     """Projeto de um filtro passa-baixas por aproximação ideal.
     
     Args:
-        f_c: Frequência de corte do filtro em Hz.
-        f_s: Frequência de amostragem em Hz.
+        f_c: Frequência de corte do filtro normalizada pela frequência de amostragem.
         M: Número de coeficientes do filtro.
         
     Returns:
         h: Coeficientes do filtro.
     """
     h = np.zeros(M)
-    omega_c = 2 * np.pi * f_c / f_s
+    omega_c = 2 * np.pi * f_c
 
-    for n in range(0, M):
+    for n in prange(0, M):
         k = n - (M-1)/2
         if k == 0:
             h[n] = omega_c / np.pi
         else:
             h[n] = (1/(np.pi * k))*np.sin(omega_c * k)
+    
+    h /= np.sum(h)
     return h
 
 @njit(parallel=True)
@@ -618,13 +619,12 @@ def hamming_window(M, alpha = 0.54):
     return w
 
 @njit(parallel=True)
-def hamming_fir(f_c, f_s, M, alpha = 0.54):
+def hamming_fir(f_c, M, alpha = 0.54):
     '''
     Função que calcula os coeficientes de um filtro fir passa-baixas utilizando janelamento de Hamming
 
     Args:
-        f_c: Frequência de corte do filtro em Hz.
-        f_s: Frequência de amostragem em Hz.
+        f_c: Frequência de corte do filtro normalizada.
         M: Número de coeficientes do filtro.
         alpha: Parâmetro da janela de Hamming
     
@@ -632,7 +632,7 @@ def hamming_fir(f_c, f_s, M, alpha = 0.54):
         h_hamming: Coeficientes do filtro
     '''
 
-    h = ideal_lp(f_c, f_s, M)
+    h = ideal_lp(f_c, M)
     window = hamming_window(M, alpha)
 
     h_hamming = h*window
